@@ -5,6 +5,7 @@ import android.content.*;
 import android.graphics.*;
 import android.hardware.display.*;
 import android.media.*;
+import android.media.projection.MediaProjection;
 import android.os.*;
 import android.util.DisplayMetrics;
 import java.io.ByteArrayOutputStream;
@@ -16,7 +17,11 @@ public class MirrorService extends Service {
 
     @Override public void onCreate(){ super.onCreate(); worker=new HandlerThread("mirror-worker"); worker.start(); handler=new Handler(worker.getLooper()); }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        if(intent!=null && intent.hasExtra("resultCode")){ startForeground(7,notification()); startCapture(intent); }
+        if(intent!=null && intent.hasExtra("resultCode")){
+            if(Build.VERSION.SDK_INT>=29) startForeground(7,notification(),android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            else startForeground(7,notification());
+            startCapture(intent);
+        }
         return START_NOT_STICKY;
     }
     private Notification notification(){
@@ -28,12 +33,15 @@ public class MirrorService extends Service {
         try {
             if(server==null){ server=new CastServer(8765); server.start(); }
             MediaProjectionManagerHolder holder=new MediaProjectionManagerHolder(this);
-            projection=holder.mpm.getMediaProjection(intent.getIntExtra("resultCode",Activity.RESULT_CANCELED),(Intent)intent.getParcelableExtra("data"));
+            Intent data;
+            if(Build.VERSION.SDK_INT>=33) data=intent.getParcelableExtra("data", Intent.class);
+            else data=(Intent)intent.getParcelableExtra("data");
+            projection=holder.mpm.getMediaProjection(intent.getIntExtra("resultCode",Activity.RESULT_CANCELED),data);
             DisplayMetrics dm=getResources().getDisplayMetrics(); density=dm.densityDpi; width=Math.min(1280,dm.widthPixels); height=(int)((float)dm.heightPixels*width/dm.widthPixels);
             reader=ImageReader.newInstance(width,height,PixelFormat.RGBA_8888,2);
             reader.setOnImageAvailableListener(r -> capture(r),handler);
-            display=projection.createVirtualDisplay("CastBridge",width,height,density,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader.getSurface(),null,handler);
             projection.registerCallback(new MediaProjection.Callback(){@Override public void onStop(){stopSelf();}},handler);
+            display=projection.createVirtualDisplay("CastBridge",width,height,density,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader.getSurface(),null,handler);
         }catch(Exception e){ stopSelf(); }
     }
     private void capture(ImageReader r){

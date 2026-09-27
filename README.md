@@ -67,3 +67,13 @@ CastBridgeTV/
 ├── gradle.properties
 └── settings.gradle
 ```
+
+
+## Build fix in v1.0.1
+
+This package includes Android MediaProjection fixes required for current Android releases:
+- Correct `android.media.projection.MediaProjection` import.
+- Registers the MediaProjection callback before creating the VirtualDisplay.
+- Uses the mediaProjection foreground-service type on Android 10+.
+- Uses the typed `getParcelableExtra` API on Android 13+.
+- GitHub Actions uses current checkout/setup-java action versions.
